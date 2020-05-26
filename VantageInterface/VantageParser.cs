@@ -53,5 +53,22 @@ namespace VantageInterface
             }
             return (vid, new LedState(mode, red1, blue1, green1, red2, blue2, green2, blinkRate));
         }
+
+        public static (int Vid, TemperatureSensors Sensor, float Temperature) ParseThermTemp(this string value)
+        {
+            string[] ret2 = value.Split(' ');
+            int vid = int.Parse(ret2[1]);
+            TemperatureSensors sensor;
+            switch(ret2[2])
+            {
+                case "COOL": sensor = TemperatureSensors.Cool; break;
+                case "HEAT": sensor = TemperatureSensors.Heat; break;
+                case "INDOOR": sensor = TemperatureSensors.Indoor; break;
+                case "OUTDOOR": sensor = TemperatureSensors.Outdoor; break;
+                default: throw new InvalidOperationException();
+            }
+            float temp = float.Parse(ret2[3]);
+            return (vid, sensor, temp);
+        }
     }
 }

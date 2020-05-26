@@ -46,12 +46,12 @@ namespace VantageInterface
             return _control.WriteLineAsync($"GETTASK {vid}");
         }
 
-        public void Thermostat(int vid)
+        public void Temperature(int vid)
         {
             _control.WriteLine($"GETTEMP {vid}");
         }
 
-        public Task ThermostatAsync(int vid)
+        public Task TemperatureAsync(int vid)
         {
             return _control.WriteLineAsync($"GETTEMP {vid}");
         }

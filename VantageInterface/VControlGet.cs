@@ -70,36 +70,45 @@ namespace VantageInterface
             return retStr.Split(' ')[1];
         }
 
+        public float ThermostatCoolSetpoint(int vid)
+        {
+            var retStr = _control.WaitFor($"GETTHERMTEMP {vid} COOL", "GETTHERMTEMP");
+            var parsed = retStr.ParseThermTemp();
+            return parsed.Temperature;
+        }
+
+        public async Task<float> ThermostatCoolSetpointAsync(int vid)
+        {
+            var retStr = await _control.WaitForAsync($"GETTHERMTEMP {vid} COOL", "GETTHERMTEMP");
+            var parsed = retStr.ParseThermTemp();
+            return parsed.Temperature;
+        }
+
+        public float ThermostatHeatSetpoint(int vid)
+        {
+            var retStr = _control.WaitFor($"GETTHERMTEMP {vid} HEAT", "GETTHERMTEMP");
+            var parsed = retStr.ParseThermTemp();
+            return parsed.Temperature;
+        }
+
+        public async Task<float> ThermostatHeatSetpointAsync(int vid)
+        {
+            var retStr = await _control.WaitForAsync($"GETTHERMTEMP {vid} HEAT", "GETTHERMTEMP");
+            var parsed = retStr.ParseThermTemp();
+            return parsed.Temperature;
+        }
+
         //=======todo (add parsing, return values, add to monitoring) ===========
-        public void Thermostat(int vid)
+        public void Temperature(int vid)
         {
             _control.WriteLine($"GETTEMP {vid}");
         }
 
-        public Task ThermostatAsync(int vid)
+        public Task TemperatureAsync(int vid)
         {
             return _control.WriteLineAsync($"GETTEMP {vid}");
         }
 
-        public void ThermostatCoolSetpoint(int vid)
-        {
-            _control.WriteLine($"GETTHERMTEMP {vid} COOL");
-        }
-
-        public Task ThermostatCoolSetpointAsync(int vid)
-        {
-            return _control.WriteLineAsync($"GETTHERMTEMP {vid} COOL");
-        }
-
-        public void ThermostatHeatSetpoint(int vid)
-        {
-            _control.WriteLine($"GETTHERMTEMP {vid} HEAT");
-        }
-
-        public Task ThermostatHeatSetpointAsync(int vid)
-        {
-            return _control.WriteLineAsync($"GETTHERMTEMP {vid} HEAT");
-        }
         public void ThermostatIndoorTemperature(int vid)
         {
             _control.WriteLine($"GETTHERMTEMP {vid} INDOOR");

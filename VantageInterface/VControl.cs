@@ -29,6 +29,7 @@ namespace VantageInterface
         public event Action<int, LedState> LedUpdate;
         public event Action<int, int> TaskUpdate;
         public event Action<int, ButtonModes> ButtonUpdate;
+        public event Action<int, TemperatureSensors, float> TemperatureSensorUpdate;
 
         public VControl(string hostName) {
             _hostName = hostName;
@@ -117,7 +118,7 @@ namespace VantageInterface
                             var (vid, percent) = ret.ParseLoad();
                             LoadUpdate?.Invoke(vid, percent);
                         }
-                        else if (ret.StartsWith("S:TASK "))
+                        else if (ret.StartsWith("S:TASK ") || ret.StartsWith("R:GETTASK "))
                         {
                             var (vid, state) = ret.ParseTask();
                             TaskUpdate?.Invoke(vid, state);
@@ -127,10 +128,15 @@ namespace VantageInterface
                             var (vid, mode) = ret.ParseButton();
                             ButtonUpdate?.Invoke(vid, mode);
                         }
-                        else if (ret.StartsWith("S:LED "))
+                        else if (ret.StartsWith("S:LED ") || ret.StartsWith("R:GETLED "))
                         {
                             var led = ret.ParseLed();
                             LedUpdate?.Invoke(led.Vid, led.State);
+                        }
+                        else if (ret.StartsWith("R:GETTHERMTEMP "))
+                        {
+                            var t = ret.ParseThermTemp();
+                            TemperatureSensorUpdate?.Invoke(t.Vid, t.Sensor, t.Temperature);
                         }
                     }
                     catch { 
