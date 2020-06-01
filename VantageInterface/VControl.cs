@@ -201,6 +201,11 @@ namespace VantageInterface
                     }
                 }
                 _gotText += task;
+                if (!_connected)
+                {
+                    _gotText -= task;
+                    throw new ObjectDisposedException(nameof(VControl));
+                }
                 WriteLine(commandToSend);
                 manualResetEvent.WaitOne();
                 Interlocked.MemoryBarrier();
@@ -218,13 +223,12 @@ namespace VantageInterface
                 if (command == null)
                 {
                     _gotText -= task;
+                    //run the callback on a separate thread
                     Task.Run(() =>
                     {
-                        try
-                        {
-                            taskCompletionSource.SetException(new ObjectDisposedException(nameof(VControl)));
-                        }
-                        catch { }
+                        //assuming that another thread has awaited taskCompletionSource.Task,
+                        //  this will run the completion function synchronously
+                        taskCompletionSource.SetException(new ObjectDisposedException(nameof(VControl)));
                     });
                 }
                 else
@@ -232,18 +236,22 @@ namespace VantageInterface
                     if (command.StartsWith(commandToWaitFor))
                     {
                         _gotText -= task;
+                        //run the callback on a separate thread
                         Task.Run(() =>
                         {
-                            try
-                            {
-                                taskCompletionSource.SetResult(command);
-                            }
-                            catch { }
+                            //assuming that another thread has awaited taskCompletionSource.Task,
+                            //  this will run that function synchronously
+                            taskCompletionSource.SetResult(command);
                         });
                     }
                 }
             }
             _gotText += task;
+            if (!_connected)
+            {
+                _gotText -= task;
+                throw new ObjectDisposedException(nameof(VControl));
+            }
             await WriteLineAsync(commandToSend);
             return await taskCompletionSource.Task;
         }
