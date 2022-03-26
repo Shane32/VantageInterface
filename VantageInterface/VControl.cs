@@ -5,10 +5,11 @@ using System.IO;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Collections.Generic;
 
 namespace VantageInterface
 {
-    public class VControl : IDisposable
+    public class VControl : IDisposable, IObservable<VEventArgs>
     {
         //private variables
         private TcpClient _tcpClient = new TcpClient();
@@ -25,11 +26,11 @@ namespace VantageInterface
         public VControlSet Set { get; }
 
         //events
-        public event Action<int, float> LoadUpdate;
-        public event Action<int, LedState> LedUpdate;
-        public event Action<int, int> TaskUpdate;
-        public event Action<int, ButtonModes> ButtonUpdate;
-        public event Action<int, TemperatureSensors, float> TemperatureSensorUpdate;
+        public event EventHandler<VLoadEventArgs> OnLoadUpdate;
+        public event EventHandler<VLedEventArgs> OnLedUpdate;
+        public event EventHandler<VTaskEventArgs> OnTaskUpdate;
+        public event EventHandler<VButtonEventArgs> OnButtonUpdate;
+        public event EventHandler<VTemperatureSensorEventArgs> OnTemperatureSensorUpdate;
 
         public VControl(string hostName) {
             _hostName = hostName;
@@ -113,37 +114,70 @@ namespace VantageInterface
                         }
                         Debug.WriteLine($"Got some text: {ret}");
                         _gotText?.Invoke(ret);
+                        VEventArgs eventArgs = null;
                         if (ret.StartsWith("S:LOAD ") || ret.StartsWith("R:GETLOAD "))
                         { //LOAD 123 55.0
                             var (vid, percent) = ret.ParseLoad();
-                            LoadUpdate?.Invoke(vid, percent);
+                            var ev = new VLoadEventArgs(vid, percent);
+                            OnLoadUpdate?.Invoke(this, ev);
+                            eventArgs = ev;
                         }
                         else if (ret.StartsWith("S:TASK ") || ret.StartsWith("R:GETTASK "))
                         {
                             var (vid, state) = ret.ParseTask();
-                            TaskUpdate?.Invoke(vid, state);
+                            var ev = new VTaskEventArgs(vid, state);
+                            OnTaskUpdate?.Invoke(this, ev);
+                            eventArgs = ev;
                         }
                         else if (ret.StartsWith("S:BTN "))
                         {
                             var (vid, mode) = ret.ParseButton();
-                            ButtonUpdate?.Invoke(vid, mode);
+                            var ev = new VButtonEventArgs(vid, mode);
+                            OnButtonUpdate?.Invoke(this, ev);
+                            eventArgs = ev;
                         }
                         else if (ret.StartsWith("S:LED ") || ret.StartsWith("R:GETLED "))
                         {
-                            var led = ret.ParseLed();
-                            LedUpdate?.Invoke(led.Vid, led.State);
+                            var (vid, state) = ret.ParseLed();
+                            var ev = new VLedEventArgs(vid, state);
+                            OnLedUpdate?.Invoke(this, ev);
+                            eventArgs = ev;
                         }
                         else if (ret.StartsWith("R:GETTHERMTEMP "))
                         {
-                            var t = ret.ParseThermTemp();
-                            TemperatureSensorUpdate?.Invoke(t.Vid, t.Sensor, t.Temperature);
+                            var (vid, sensor, temp) = ret.ParseThermTemp();
+                            var ev = new VTemperatureSensorEventArgs(vid, sensor, temp);
+                            OnTemperatureSensorUpdate?.Invoke(this, ev);
+                            eventArgs = ev;
+                        }
+                        if (eventArgs != null)
+                        {
+                            IObserver<VEventArgs>[] os;
+                            lock (_observers)
+                            {
+                                os = _observers.ToArray();
+                            }
+                            foreach (var o in os)
+                            {
+                                o.OnNext(eventArgs);
+                            }
                         }
                     }
                     catch { 
                         if (!_tcpClient.Connected)
                         {
                             Debug.WriteLine("disconnected");
-                            _connected = false;
+                            IObserver<VEventArgs>[] os;
+                            lock (_observers)
+                            {
+                                _connected = false;
+                                os = _observers.ToArray();
+                                _observers.Clear();
+                            }
+                            foreach (var o in os)
+                            {
+                                o.OnCompleted();
+                            }
                         }
                     }
                 }
@@ -162,13 +196,6 @@ namespace VantageInterface
 
         public void Dispose() {
             Close();
-        }
-
-        // lighting loads
-
-        // buttons & their leds
-        public void PushButton(int vid, int pushType) {
-            //pushType = 1: push, 2: release, 3: push & release
         }
 
         internal string WaitFor(string commandToSend, string commandToWaitFor)
@@ -254,6 +281,36 @@ namespace VantageInterface
             }
             await WriteLineAsync(commandToSend);
             return await taskCompletionSource.Task;
+        }
+
+        private readonly List<IObserver<VEventArgs>> _observers = new List<IObserver<VEventArgs>>();
+        public IDisposable Subscribe(IObserver<VEventArgs> observer)
+        {
+            lock (_observers)
+            {
+                if (!_connected)
+                    throw new ObjectDisposedException(nameof(VControl));
+                _observers.Add(observer);
+            }
+            return new Subscription(() =>
+            {
+                lock (_observers)
+                {
+                    _observers.Remove(observer);
+                }
+            });
+        }
+
+        private class Subscription : IDisposable
+        {
+            private readonly Action _disposeAction;
+            public Subscription(Action disposeAction)
+            {
+                _disposeAction = disposeAction ?? throw new ArgumentNullException(nameof(disposeAction));
+            }
+
+            public void Dispose()
+                => _disposeAction();
         }
     }
 }

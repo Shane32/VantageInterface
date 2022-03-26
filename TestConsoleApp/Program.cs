@@ -39,19 +39,22 @@ namespace TestConsoleApp
             //await Task.Delay(1);
             vControl = new VControl("172.18.0.9");
 
-            vControl.LoadUpdate += (int vid, float percent) =>
+            vControl.OnLoadUpdate += (object source, VLoadEventArgs args2) =>
             {
-                Console.WriteLine($"Load #{vid} set to {percent}%");
+                Console.WriteLine($"Load #{args2.Vid} set to {args2.Percent}%");
             };
-            vControl.TaskUpdate += (int vid, int state) =>
+            vControl.OnTaskUpdate += (object source, VTaskEventArgs args2) =>
             {
-                Console.WriteLine($"Task #{vid} new state {state}");
+                Console.WriteLine($"Task #{args2.Vid} new state {args2.State}");
             };
-            vControl.ButtonUpdate += (int vid, ButtonModes mode) =>
+            vControl.OnButtonUpdate += (object source, VButtonEventArgs args2) =>
             {
-                Console.WriteLine($"Button #{vid} {(mode == ButtonModes.Press ? "Pressed" : "Released")}");
+                Console.WriteLine($"Button #{args2.Vid} {(args2.Mode == ButtonModes.Press ? "Pressed" : "Released")}");
             };
-            vControl.LedUpdate += LedUpdateFn;
+            vControl.OnLedUpdate += (object source, VLedEventArgs args2) =>
+            {
+                Console.WriteLine($"LED #{args2.Vid} set to state {args2.State}");
+            };
 
             //await vControl.ConnectAsync();
             vControl.Connect();
@@ -80,10 +83,6 @@ namespace TestConsoleApp
             vControl.Close();
 
 
-        }
-
-        static void LedUpdateFn(int vid, LedState state) {
-            Console.WriteLine($"LED #{vid} set to state {state.State}");
         }
     }
 }
