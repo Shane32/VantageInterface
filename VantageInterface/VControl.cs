@@ -19,6 +19,7 @@ namespace VantageInterface
         private volatile bool _connected;
         private string _hostName;
         private event Action<string> _gotText;
+        private bool _withEvents;
 
         //properties
         public VControlExecute Execute { get; }
@@ -32,9 +33,10 @@ namespace VantageInterface
         public event EventHandler<VButtonEventArgs> OnButtonUpdate;
         public event EventHandler<VTemperatureSensorEventArgs> OnTemperatureSensorUpdate;
 
-        public VControl(string hostName) {
+        public VControl(string hostName, bool withEvents = true) {
             _hostName = hostName;
             _tcpClient.LingerState = new LingerOption(true, 1);
+            _withEvents = withEvents;
             Execute = new VControlExecute(this);
             Get = new VControlGet(this);
             Set = new VControlSet(this);
@@ -57,7 +59,8 @@ namespace VantageInterface
             //_streamWriter.WriteLine("STATUS THERMFAN");
             //_streamWriter.WriteLine("STATUS THERMOP");
             //_streamWriter.WriteLine("STATUS THERMDAY");
-            _streamWriter.WriteLine("STATUS ALL");
+            if (_withEvents)
+                _streamWriter.WriteLine("STATUS ALL");
             _streamWriter.WriteLine("ECHO 0 INFUSION");
             _streamWriter.Flush();
 

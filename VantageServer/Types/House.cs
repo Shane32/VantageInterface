@@ -5,10 +5,16 @@ namespace VantageServer.Types
 {
     public class House
     {
-        private VControl _control;
-        public House(VControl control)
+        private readonly HouseConfiguration _houseConfiguration;
+        private readonly VControl _control;
+        public string Name => _houseConfiguration.Name;
+        public string Id => _houseConfiguration.Id;
+        public string IpAddress => _houseConfiguration.IPAddress;
+
+        public House(HouseConfiguration houseConfig, VControl vControl)
         {
-            _control = control;
+            _houseConfiguration = houseConfig;
+            _control = vControl;
         }
 
         public async Task<Load> Load([Id] int id)

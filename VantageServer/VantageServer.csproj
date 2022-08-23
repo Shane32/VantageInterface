@@ -1,19 +1,29 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>435fd563-8932-4973-bfd7-9e7670a1e206</UserSecretsId>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="GraphQL.AspNetCore3" Version="3.0.0" />
-    <PackageReference Include="GraphQL.Server.Ui.Playground" Version="6.0.0" />
-    <PackageReference Include="GraphQL.SystemTextJson" Version="5.2.0" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="GraphQL.AspNetCore3" Version="5.0.0" />
+		<PackageReference Include="GraphQL.Server.Ui.Playground" Version="7.0.0" />
+		<PackageReference Include="GraphQL.SystemTextJson" Version="7.0.0" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\VantageInterface\VantageInterface.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\VantageInterface\VantageInterface.csproj" />
+	</ItemGroup>
 
+	<ItemGroup>
+		<Using Include="GraphQL" />
+		<Using Include="GraphQL.Types" />
+		<Using Include="GraphQL.AspNetCore3" />
+		<Using Include="Microsoft.Extensions.Options" />
+		<Using Include="VantageServer.Configuration" />
+		<Using Include="VantageServer.Types" />
+		<Using Include="VantageServer.Services" />
+	</ItemGroup>
 </Project>
