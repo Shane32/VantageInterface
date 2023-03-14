@@ -1,11 +1,10 @@
-﻿using System;
-using System.Threading.Tasks;
-using System.Net.Sockets;
-using System.IO;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Threading;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace VantageInterface
 {
@@ -14,7 +13,6 @@ namespace VantageInterface
         //private variables
         private TcpClient _tcpClient = new TcpClient();
         private NetworkStream _networkStream;
-        private StreamWriter _streamWriter;
         private StreamReader _streamReader;
         private volatile bool _connected;
         private string _hostName;
@@ -48,7 +46,6 @@ namespace VantageInterface
             // set up asynchronous listener for lighting and button led changes
             _tcpClient.Connect(_hostName, 3001);
             _networkStream = _tcpClient.GetStream();
-            _streamWriter = new StreamWriter(_networkStream, System.Text.Encoding.ASCII);
             _streamReader = new StreamReader(_networkStream, System.Text.Encoding.ASCII);
 
             //_streamWriter.WriteLine("STATUS LOAD");
@@ -60,18 +57,16 @@ namespace VantageInterface
             //_streamWriter.WriteLine("STATUS THERMOP");
             //_streamWriter.WriteLine("STATUS THERMDAY");
             if (_withEvents)
-                _streamWriter.WriteLine("STATUS ALL");
-            _streamWriter.WriteLine("ECHO 0 INFUSION");
-            _streamWriter.Flush();
+                WriteLine("STATUS ALL");
+            WriteLine("ECHO 0 INFUSION");
 
             _connected = true;
             StartListener();
         }
 
-        public async Task ConnectAsync() {
-            await _tcpClient.ConnectAsync(_hostName, 3001);
+        public async Task ConnectAsync(CancellationToken cancellationToken) {
+            await _tcpClient.ConnectAsync(_hostName, 3001).ConfigureAwait(false);
             _networkStream = _tcpClient.GetStream();
-            _streamWriter = new StreamWriter(_networkStream, System.Text.Encoding.ASCII);
             _streamReader = new StreamReader(_networkStream, System.Text.Encoding.ASCII);
 
             //await _streamWriter.WriteLineAsync("STATUS LOAD");
@@ -82,9 +77,9 @@ namespace VantageInterface
             //await _streamWriter.WriteLineAsync("STATUS THERMFAN");
             //await _streamWriter.WriteLineAsync("STATUS THERMOP");
             //await _streamWriter.WriteLineAsync("STATUS THERMDAY");
-            await _streamWriter.WriteLineAsync("STATUS ALL");
-            await _streamWriter.WriteLineAsync("ECHO 0 INFUSION");
-            await _streamWriter.FlushAsync();
+            if (_withEvents)
+                await WriteLineAsync("STATUS ALL", cancellationToken).ConfigureAwait(false);
+            await WriteLineAsync("ECHO 0 INFUSION", cancellationToken).ConfigureAwait(false);
 
             _connected = true;
             StartListener();
@@ -92,14 +87,16 @@ namespace VantageInterface
 
         internal void WriteLine(string str)
         {
-            _streamWriter.WriteLine(str);
-            _streamWriter.Flush();
+            var bytes = System.Text.Encoding.ASCII.GetBytes(str + Environment.NewLine);
+            _networkStream.Write(bytes, 0, bytes.Length);
+            _networkStream.Flush();
         }
 
-        internal async Task WriteLineAsync(string str)
+        internal async Task WriteLineAsync(string str, CancellationToken cancellationToken = default)
         {
-            await _streamWriter.WriteLineAsync(str);
-            await _streamWriter.FlushAsync();
+            var bytes = System.Text.Encoding.ASCII.GetBytes(str + Environment.NewLine);
+            await _networkStream.WriteAsync(bytes, 0, bytes.Length, cancellationToken).ConfigureAwait(false);
+            await _networkStream.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private async void StartListener() {
@@ -109,7 +106,7 @@ namespace VantageInterface
                 {
                     try
                     {
-                        var ret = await _streamReader.ReadLineAsync();
+                        var ret = await _streamReader.ReadLineAsync().ConfigureAwait(false);
                         if (ret == null)
                         {
                             Debug.WriteLine("Connection closed gracefully");
@@ -244,7 +241,7 @@ namespace VantageInterface
             }
         }
 
-        internal async Task<string> WaitForAsync(string commandToSend, string commandToWaitFor)
+        internal async Task<string> WaitForAsync(string commandToSend, string commandToWaitFor, CancellationToken cancellationToken = default)
         {
             if (!commandToWaitFor.EndsWith(" ")) commandToWaitFor += " ";
             TaskCompletionSource<string> taskCompletionSource = new TaskCompletionSource<string>();
@@ -282,8 +279,8 @@ namespace VantageInterface
                 _gotText -= task;
                 throw new ObjectDisposedException(nameof(VControl));
             }
-            await WriteLineAsync(commandToSend);
-            return await taskCompletionSource.Task;
+            await WriteLineAsync(commandToSend, cancellationToken).ConfigureAwait(false);
+            return await taskCompletionSource.Task.ConfigureAwait(false);
         }
 
         private readonly List<IObserver<VEventArgs>> _observers = new List<IObserver<VEventArgs>>();

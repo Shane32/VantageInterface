@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -23,7 +23,7 @@ namespace VantageInterface
         public async Task LoadAsync(int vid)
         {
             //request that the current level of a specified load be updated
-            await _control.WriteLineAsync($"GETLOAD {vid}");
+            await _control.WriteLineAsync($"GETLOAD {vid}").ConfigureAwait(false);
         }
 
         public void Led(int vid)

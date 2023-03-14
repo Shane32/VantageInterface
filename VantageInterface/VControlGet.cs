@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -25,7 +25,7 @@ namespace VantageInterface
         public async Task<float> LoadAsync(int vid)
         {
             //retrieve the current level of a specified load
-            var ret = await _control.WaitForAsync($"GETLOAD {vid}", $"R:GETLOAD {vid}");
+            var ret = await _control.WaitForAsync($"GETLOAD {vid}", $"R:GETLOAD {vid}").ConfigureAwait(false);
             var (_, percent) = ret.ParseLoad();
             return percent;
         }
@@ -39,7 +39,7 @@ namespace VantageInterface
 
         public async Task<LedState> LedAsync(int vid)
         {
-            var retStr = await _control.WaitForAsync($"GETLED {vid}", $"R:GETLED {vid}");
+            var retStr = await _control.WaitForAsync($"GETLED {vid}", $"R:GETLED {vid}").ConfigureAwait(false);
             var ret = retStr.ParseLed();
             return ret.State;
         }
@@ -53,7 +53,7 @@ namespace VantageInterface
 
         public async Task<int> TaskAsync(int vid)
         {
-            var retStr = await _control.WaitForAsync($"GETTASK {vid}", $"R:GETTASK {vid}");
+            var retStr = await _control.WaitForAsync($"GETTASK {vid}", $"R:GETTASK {vid}").ConfigureAwait(false);
             var ret = retStr.ParseTask();
             return ret.newState;
         }
@@ -66,7 +66,7 @@ namespace VantageInterface
 
         public async Task<string> VersionAsync()
         {
-            var retStr = await _control.WaitForAsync("VERSION", "R:VERSION");
+            var retStr = await _control.WaitForAsync("VERSION", "R:VERSION").ConfigureAwait(false);
             return retStr.Split(' ')[1];
         }
 
@@ -79,7 +79,7 @@ namespace VantageInterface
 
         public async Task<float> ThermostatCoolSetpointAsync(int vid)
         {
-            var retStr = await _control.WaitForAsync($"GETTHERMTEMP {vid} COOL", "GETTHERMTEMP");
+            var retStr = await _control.WaitForAsync($"GETTHERMTEMP {vid} COOL", "GETTHERMTEMP").ConfigureAwait(false);
             var parsed = retStr.ParseThermTemp();
             return parsed.Temperature;
         }
@@ -93,7 +93,7 @@ namespace VantageInterface
 
         public async Task<float> ThermostatHeatSetpointAsync(int vid)
         {
-            var retStr = await _control.WaitForAsync($"GETTHERMTEMP {vid} HEAT", "GETTHERMTEMP");
+            var retStr = await _control.WaitForAsync($"GETTHERMTEMP {vid} HEAT", "GETTHERMTEMP").ConfigureAwait(false);
             var parsed = retStr.ParseThermTemp();
             return parsed.Temperature;
         }

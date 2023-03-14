@@ -7,7 +7,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestConsoleApp", "TestConso
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VantageInterface", "VantageInterface\VantageInterface.csproj", "{F2876F90-DDD6-4B8B-BDFC-ED7EDF1EC575}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VantageServer", "VantageServer\VantageServer.csproj", "{0C1DE133-BA3E-493D-AA44-D88FA8317393}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VantageServer", "VantageServer\VantageServer.csproj", "{0C1DE133-BA3E-493D-AA44-D88FA8317393}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{63A40428-A0C6-4447-89BC-363B3091BA2C}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
