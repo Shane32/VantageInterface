@@ -6,6 +6,7 @@ namespace TestConsoleApp
 {
     class Program
     {
+        static VConnection vConnection;
         static VControl vControl;
 
         static void Main(string[] args)
@@ -33,7 +34,8 @@ namespace TestConsoleApp
         static async Task MainAsync(string[] args)
         {
             //await Task.Delay(1);
-            vControl = new VControl("172.18.0.9");
+            vConnection = await VConnection.ConnectAsync("172.18.0.9", default);
+            vControl = new VControl(vConnection);
 
             vControl.OnLoadUpdate += (object source, VLoadEventArgs args2) =>
             {
@@ -53,7 +55,7 @@ namespace TestConsoleApp
             };
 
             //await vControl.ConnectAsync();
-            vControl.Connect();
+            //vControl.Connect();
             Console.WriteLine("Getting load 219");
             //vControl.UpdateLoad(219);
             Console.WriteLine(await vControl.Get.LoadAsync(219));
@@ -76,8 +78,8 @@ namespace TestConsoleApp
 
             Console.ReadLine();
 
-            vControl.Close();
-
+            vControl.Dispose();
+            vConnection.Dispose();
 
         }
     }
