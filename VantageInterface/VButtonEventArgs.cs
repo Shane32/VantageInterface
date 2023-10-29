@@ -1,17 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public class VButtonEventArgs : VEventArgs
 {
-    public class VButtonEventArgs : VEventArgs
-    {
-        public ButtonModes Mode { get; }
+    public ButtonModes Mode { get; }
 
-        public VButtonEventArgs(int vid, ButtonModes action)
-            : base(vid, VEventType.ButtonUpdate)
-        {
-            Mode = action;
-        }
+    public VButtonEventArgs(int vid, ButtonModes action)
+        : base(vid, VEventType.ButtonUpdate)
+    {
+        Mode = action;
     }
 }

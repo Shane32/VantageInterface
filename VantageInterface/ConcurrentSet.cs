@@ -1,6 +1,4 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 
 namespace VantageInterface;
 
@@ -14,8 +12,11 @@ namespace VantageInterface;
 public class ConcurrentSet<T> : IEnumerable<T>
 {
     private volatile T[] _items = Array.Empty<T>();
-    private readonly object _syncLock = new object();
+    private readonly object _syncLock = new();
 
+    /// <summary>
+    /// Adds an object to the <see cref="ConcurrentSet{T}"/>.
+    /// </summary>
     public void Add(T item)
     {
         lock (_syncLock) {
@@ -29,6 +30,9 @@ public class ConcurrentSet<T> : IEnumerable<T>
         }
     }
 
+    /// <summary>
+    /// Removes an object from the <see cref="ConcurrentSet{T}"/>, returning <see langword="true"/> if the object was successfully removed.
+    /// </summary>
     public bool Remove(T item)
     {
         lock (_syncLock) {
@@ -45,6 +49,7 @@ public class ConcurrentSet<T> : IEnumerable<T>
         }
     }
 
+    /// <inheritdoc/>
     public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)_items).GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => _items.GetEnumerator();

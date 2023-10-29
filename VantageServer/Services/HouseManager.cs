@@ -1,4 +1,4 @@
-﻿using VantageInterface;
+using VantageInterface;
 
 namespace VantageServer.Services
 {
@@ -8,7 +8,7 @@ namespace VantageServer.Services
         public Dictionary<string, House> HousesDictionary { get; } = new(StringComparer.Ordinal);
         //public IEnumerable<HouseMutation> HouseMutations => HouseMutationsDictionary.Values;
 
-        public HouseManager(IOptions<IEnumerable<HouseConfiguration>> houseConfigurations)
+        public HouseManager(VConnectionManager vConnection, IOptions<IEnumerable<HouseConfiguration>> houseConfigurations)
         {
             foreach (var houseConfig in houseConfigurations.Value
                 .Where(x => !string.IsNullOrEmpty(x.IPAddress) && !string.IsNullOrEmpty(x.Name) && !string.IsNullOrEmpty(x.Id)))

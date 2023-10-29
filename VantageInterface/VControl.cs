@@ -1,23 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace VantageInterface;
 
-public class VControl : IDisposable, IObservable<VEventArgs>
+public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
 {
     //private variables
-    private readonly TcpClient _tcpClient = new TcpClient();
-    private NetworkStream _networkStream;
-    private StreamReader _streamReader;
+    private readonly IVConnection _connection;
+    private readonly IDisposable _subscription;
     private volatile bool _connected;
-    private readonly string _hostName;
-    private event Action<string> _gotText;
-    private readonly bool _withEvents;
+    private event Action<string?>? _gotText;
 
     //properties
     public VControlExecute Execute { get; }
@@ -25,227 +20,148 @@ public class VControl : IDisposable, IObservable<VEventArgs>
     public VControlSet Set { get; }
 
     //events
-    public event EventHandler<VLoadEventArgs> OnLoadUpdate;
-    public event EventHandler<VLedEventArgs> OnLedUpdate;
-    public event EventHandler<VTaskEventArgs> OnTaskUpdate;
-    public event EventHandler<VButtonEventArgs> OnButtonUpdate;
-    public event EventHandler<VTemperatureSensorEventArgs> OnTemperatureSensorUpdate;
+    public event EventHandler<VLoadEventArgs>? OnLoadUpdate;
+    public event EventHandler<VLedEventArgs>? OnLedUpdate;
+    public event EventHandler<VTaskEventArgs>? OnTaskUpdate;
+    public event EventHandler<VButtonEventArgs>? OnButtonUpdate;
+    public event EventHandler<VTemperatureSensorEventArgs>? OnTemperatureSensorUpdate;
 
-    public VControl(string hostName, bool withEvents = true) {
-        _hostName = hostName;
-        _tcpClient.LingerState = new LingerOption(true, 1);
-        _withEvents = withEvents;
+    public VControl(IVConnection connection) {
         Execute = new VControlExecute(this);
         Get = new VControlGet(this);
         Set = new VControlSet(this);
-    }
-
-    // set-up
-    public void Connect() {
-        // connect to vantage system
-        // set up asynchronous listener for lighting and button led changes
-        _tcpClient.Connect(_hostName, 3001);
-        _networkStream = _tcpClient.GetStream();
-        _streamReader = new StreamReader(_networkStream, System.Text.Encoding.ASCII);
-
-        //_streamWriter.WriteLine("STATUS LOAD");
-        //_streamWriter.WriteLine("STATUS LED");
-        //_streamWriter.WriteLine("STATUS BTN");
-        //_streamWriter.WriteLine("STATUS TASK");
-        //_streamWriter.WriteLine("STATUS TEMP");
-        //_streamWriter.WriteLine("STATUS THERMFAN");
-        //_streamWriter.WriteLine("STATUS THERMOP");
-        //_streamWriter.WriteLine("STATUS THERMDAY");
-        if (_withEvents)
-            WriteLine("STATUS ALL");
-        WriteLine("ECHO 0 INFUSION");
-
-        _connected = true;
-        StartListener();
-    }
-
-    public async Task ConnectAsync(CancellationToken cancellationToken) {
-        await _tcpClient.ConnectAsync(_hostName, 3001).ConfigureAwait(false);
-        _networkStream = _tcpClient.GetStream();
-        _streamReader = new StreamReader(_networkStream, System.Text.Encoding.ASCII);
-
-        //await _streamWriter.WriteLineAsync("STATUS LOAD");
-        //await _streamWriter.WriteLineAsync("STATUS LED");
-        //await _streamWriter.WriteLineAsync("STATUS BTN");
-        //await _streamWriter.WriteLineAsync("STATUS TASK");
-        //await _streamWriter.WriteLineAsync("STATUS TEMP");
-        //await _streamWriter.WriteLineAsync("STATUS THERMFAN");
-        //await _streamWriter.WriteLineAsync("STATUS THERMOP");
-        //await _streamWriter.WriteLineAsync("STATUS THERMDAY");
-        if (_withEvents)
-            await WriteLineAsync("STATUS ALL", cancellationToken).ConfigureAwait(false);
-        await WriteLineAsync("ECHO 0 INFUSION", cancellationToken).ConfigureAwait(false);
-
-        _connected = true;
-        StartListener();
+        _connection = connection;
+        _subscription = _connection.Notifications.Subscribe(this);
     }
 
     internal void WriteLine(string str)
     {
-        var bytes = System.Text.Encoding.ASCII.GetBytes(str + Environment.NewLine);
-        _networkStream.Write(bytes, 0, bytes.Length);
-        _networkStream.Flush();
+        throw new NotImplementedException();
     }
 
-    internal async Task WriteLineAsync(string str, CancellationToken cancellationToken = default)
+    internal Task WriteLineAsync(string str, CancellationToken cancellationToken = default)
     {
-        var bytes = System.Text.Encoding.ASCII.GetBytes(str + Environment.NewLine);
-        await _networkStream.WriteAsync(bytes, 0, bytes.Length, cancellationToken).ConfigureAwait(false);
-        await _networkStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        return _connection.WriteLineAsync(str, cancellationToken);
     }
 
-    private async void StartListener() {
-        try
-        {
-            while (_connected)
-            {
-                try
-                {
-                    var ret = await _streamReader.ReadLineAsync().ConfigureAwait(false);
-                    if (ret == null)
-                    {
-                        Debug.WriteLine("Connection closed gracefully");
-                        return;
-                    }
-                    Debug.WriteLine($"Got some text: {ret}");
-                    _gotText?.Invoke(ret);
-                    VEventArgs eventArgs = null;
-                    if (ret.StartsWith("S:LOAD ") || ret.StartsWith("R:GETLOAD "))
-                    { //LOAD 123 55.0
-                        var (vid, percent) = ret.ParseLoad();
-                        var ev = new VLoadEventArgs(vid, percent);
-                        OnLoadUpdate?.Invoke(this, ev);
-                        eventArgs = ev;
-                    }
-                    else if (ret.StartsWith("S:TASK ") || ret.StartsWith("R:GETTASK "))
-                    {
-                        var (vid, state) = ret.ParseTask();
-                        var ev = new VTaskEventArgs(vid, state);
-                        OnTaskUpdate?.Invoke(this, ev);
-                        eventArgs = ev;
-                    }
-                    else if (ret.StartsWith("S:BTN "))
-                    {
-                        var (vid, mode) = ret.ParseButton();
-                        var ev = new VButtonEventArgs(vid, mode);
-                        OnButtonUpdate?.Invoke(this, ev);
-                        eventArgs = ev;
-                    }
-                    else if (ret.StartsWith("S:LED ") || ret.StartsWith("R:GETLED "))
-                    {
-                        var (vid, state) = ret.ParseLed();
-                        var ev = new VLedEventArgs(vid, state);
-                        OnLedUpdate?.Invoke(this, ev);
-                        eventArgs = ev;
-                    }
-                    else if (ret.StartsWith("R:GETTHERMTEMP "))
-                    {
-                        var (vid, sensor, temp) = ret.ParseThermTemp();
-                        var ev = new VTemperatureSensorEventArgs(vid, sensor, temp);
-                        OnTemperatureSensorUpdate?.Invoke(this, ev);
-                        eventArgs = ev;
-                    }
-                    if (eventArgs != null)
-                    {
-                        IObserver<VEventArgs>[] os;
-                        lock (_observers)
-                        {
-                            os = _observers.ToArray();
-                        }
-                        foreach (var o in os)
-                        {
-                            o.OnNext(eventArgs);
-                        }
-                    }
+    void IObserver<string>.OnError(Exception error)
+        => throw new NotImplementedException();
+
+    void IObserver<string>.OnCompleted()
+    {
+        try {
+            Debug.WriteLine("Connection closed gracefully");
+            _gotText?.Invoke(null);
+
+            //                Debug.WriteLine("disconnected");
+            //                IObserver<VEventArgs>[] os;
+            //                lock (_observers)
+            //                {
+            //                    _connected = false;
+            //                    os = _observers.ToArray();
+            //                    _observers.Clear();
+            //                }
+            //                foreach (var o in os)
+            //                {
+            //                    o.OnCompleted();
+            //                }
+
+        } catch { }
+    }
+
+    void IObserver<string>.OnNext(string ret)
+    {
+        try {
+            Debug.WriteLine($"Got some text: {ret}");
+            _gotText?.Invoke(ret);
+            VEventArgs? eventArgs = null;
+            if (StartsWith("S:LOAD ") || StartsWith("R:GETLOAD ")) { //LOAD 123 55.0
+                var (vid, percent) = ret.ParseLoad();
+                var ev = new VLoadEventArgs(vid, percent);
+                OnLoadUpdate?.Invoke(this, ev);
+                eventArgs = ev;
+            } else if (StartsWith("S:TASK ") || StartsWith("R:GETTASK ")) {
+                var (vid, state) = ret.ParseTask();
+                var ev = new VTaskEventArgs(vid, state);
+                OnTaskUpdate?.Invoke(this, ev);
+                eventArgs = ev;
+            } else if (StartsWith("S:BTN ")) {
+                var (vid, mode) = ret.ParseButton();
+                var ev = new VButtonEventArgs(vid, mode);
+                OnButtonUpdate?.Invoke(this, ev);
+                eventArgs = ev;
+            } else if (StartsWith("S:LED ") || StartsWith("R:GETLED ")) {
+                var (vid, state) = ret.ParseLed();
+                var ev = new VLedEventArgs(vid, state);
+                OnLedUpdate?.Invoke(this, ev);
+                eventArgs = ev;
+            } else if (StartsWith("R:GETTHERMTEMP ")) {
+                var (vid, sensor, temp) = ret.ParseThermTemp();
+                var ev = new VTemperatureSensorEventArgs(vid, sensor, temp);
+                OnTemperatureSensorUpdate?.Invoke(this, ev);
+                eventArgs = ev;
+            }
+            if (eventArgs != null) {
+                IObserver<VEventArgs>[] os;
+                lock (_observers) {
+                    os = _observers.ToArray();
                 }
-                catch { 
-                    if (!_tcpClient.Connected)
-                    {
-                        Debug.WriteLine("disconnected");
-                        IObserver<VEventArgs>[] os;
-                        lock (_observers)
-                        {
-                            _connected = false;
-                            os = _observers.ToArray();
-                            _observers.Clear();
-                        }
-                        foreach (var o in os)
-                        {
-                            o.OnCompleted();
-                        }
-                    }
+                foreach (var o in os) {
+                    o.OnNext(eventArgs);
                 }
             }
-        }
-        finally
-        {
-            _gotText?.Invoke(null);
-        }
+        } catch { }
+
+        bool StartsWith(string value) => ret.StartsWith(value, StringComparison.Ordinal);
     }
     
-    public void Close() {
-        // close connection to vantage system
-        _tcpClient.Close();
-        _connected = false;
-    }
-
     public void Dispose() {
-        Close();
+        _subscription.Dispose();
+        _connected = false;
+        GC.SuppressFinalize(this);
     }
 
     internal string WaitFor(string commandToSend, string commandToWaitFor)
     {
         if (!_connected) throw new ObjectDisposedException(nameof(VControl));
-        if (!commandToWaitFor.EndsWith(" ")) commandToWaitFor += " ";
-        string result = null;
-        bool isDisposed = false;
-        using (ManualResetEvent manualResetEvent = new ManualResetEvent(false))
+        if (!commandToWaitFor.EndsWith(" ", StringComparison.Ordinal)) commandToWaitFor += " ";
+        string? result = null;
+        using var manualResetEvent = new ManualResetEvent(false);
+        void task(string? command)
         {
-            void task(string command)
-            {
-                if (command == null)
-                {
+            if (command == null) {
+                _gotText -= task;
+                Interlocked.MemoryBarrier();
+                manualResetEvent.Set();
+                return;
+            } else {
+                if (command.StartsWith(commandToWaitFor, StringComparison.Ordinal)) {
                     _gotText -= task;
-                    isDisposed = true;
+                    result = command;
                     Interlocked.MemoryBarrier();
                     manualResetEvent.Set();
-                    return;
-                }
-                else
-                {
-                    if (command.StartsWith(commandToWaitFor))
-                    {
-                        _gotText -= task;
-                        result = command;
-                        Interlocked.MemoryBarrier();
-                        manualResetEvent.Set();
-                    }
                 }
             }
-            _gotText += task;
-            if (!_connected)
-            {
-                _gotText -= task;
-                throw new ObjectDisposedException(nameof(VControl));
-            }
-            WriteLine(commandToSend);
-            manualResetEvent.WaitOne();
-            Interlocked.MemoryBarrier();
-            if (isDisposed) throw new ObjectDisposedException(nameof(VControl));
-            return result;
         }
+        _gotText += task;
+        if (!_connected) {
+            _gotText -= task;
+            throw new ObjectDisposedException(nameof(VControl));
+        }
+        WriteLine(commandToSend);
+        manualResetEvent.WaitOne();
+        Interlocked.MemoryBarrier();
+        if (result == null)
+            throw new ObjectDisposedException(nameof(VControl));
+        return result;
     }
 
     internal async Task<string> WaitForAsync(string commandToSend, string commandToWaitFor, CancellationToken cancellationToken = default)
     {
-        if (!commandToWaitFor.EndsWith(" ")) commandToWaitFor += " ";
-        TaskCompletionSource<string> taskCompletionSource = new TaskCompletionSource<string>();
-        void task(string command)
+        if (!commandToWaitFor.EndsWith(" ", StringComparison.Ordinal)) commandToWaitFor += " ";
+        var taskCompletionSource = new TaskCompletionSource<string>();
+
+        void task(string? command)
         {
             if (command == null)
             {
@@ -256,11 +172,11 @@ public class VControl : IDisposable, IObservable<VEventArgs>
                     //assuming that another thread has awaited taskCompletionSource.Task,
                     //  this will run the completion function synchronously
                     taskCompletionSource.SetException(new ObjectDisposedException(nameof(VControl)));
-                });
+                }, default);
             }
             else
             {
-                if (command.StartsWith(commandToWaitFor))
+                if (command.StartsWith(commandToWaitFor, StringComparison.Ordinal))
                 {
                     _gotText -= task;
                     //run the callback on a separate thread
@@ -269,10 +185,11 @@ public class VControl : IDisposable, IObservable<VEventArgs>
                         //assuming that another thread has awaited taskCompletionSource.Task,
                         //  this will run that function synchronously
                         taskCompletionSource.SetResult(command);
-                    });
+                    }, default);
                 }
             }
         }
+
         _gotText += task;
         if (!_connected)
         {

@@ -1,8 +1,4 @@
 #if !NET6_0_OR_GREATER
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace VantageInterface;
 
 internal static class TaskExtensions

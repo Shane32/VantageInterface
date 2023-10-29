@@ -1,24 +1,30 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace VantageInterface;
 
-public class VConnectionManager : IDisposable
+/// <summary>
+/// Multiplexes connections to the same Vantage host.
+/// </summary>
+public partial class VConnectionManager : IDisposable
 {
     private readonly Dictionary<string, VConnectionInfo> _connections = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private bool _disposedValue;
 
+    /// <summary>
+    /// Initializes a new instance.
+    /// </summary>
     public VConnectionManager()
     {
         PeriodicCheckAsync();
     }
 
+    /// <summary>
+    /// Periodically checks for connections which have been unused for at least 30 seconds
+    /// and disconnects them.
+    /// </summary>
     private async void PeriodicCheckAsync()
     {
         while (!_cancellationTokenSource.IsCancellationRequested) {
-            await Task.Delay(60000, _cancellationTokenSource.Token);
+            await Task.Delay(60000, _cancellationTokenSource.Token).ConfigureAwait(false);
             lock (_connections) {
                 List<string>? toRemove = null;
                 foreach (var keyValuePair in _connections) {
@@ -36,35 +42,42 @@ public class VConnectionManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Acquires a connection to the specified host.
+    /// Dispose the returned connection when finished to release.
+    /// </summary>
     public ValueTask<IVConnection> AcquireAsync(string host, CancellationToken cancellationToken)
     {
         lock (_connections) {
             if (_cancellationTokenSource.IsCancellationRequested) {
                 throw new ObjectDisposedException(nameof(VConnectionManager));
             }
+            // look for an existing connection
             if (_connections.TryGetValue(host, out var info)) {
-                var ret = info.Acquire();
+                var ret = info.AcquireIfNotDisposedAsync();
                 if (ret.HasValue)
                     return ret.Value;
             }
-            info = new VConnectionInfo(host, cancellationToken);
-            _connections.Add(host, info);
-            return info.Acquire()!.Value;
+            // create a new connection
+            info = new VConnectionInfo(CreateNewConnectionAsync(host, cancellationToken));
+            _connections[host] = info;
+            // the returned task will complete when the connection is established
+            // if the connection fails, the connection will be removed from the dictionary
+            // and the error thrown
+            return info.AcquireAsync();
         }
     }
 
-    public void Dispose()
-    {
-        if (!_cancellationTokenSource.IsCancellationRequested)
-            _cancellationTokenSource.Cancel();
-        lock (_connections) {
-            foreach (var info in _connections.Values) {
-                info.Dispose();
-            }
-            _connections.Clear();
-        }
-    }
+    /// <summary>
+    /// Creates a new connection to the specified host.
+    /// </summary>
+    protected virtual async Task<IVConnection> CreateNewConnectionAsync(string host, CancellationToken cancellationToken)
+        => await VConnection.ConnectAsync(host, cancellationToken).ConfigureAwait(false);
 
+    /// <summary>
+    /// Maps a virtual connection to a real connection.
+    /// Disposing of the virtual connection releases the acquired connection without disposing it.
+    /// </summary>
     private class VConnectionMapper : IVConnection
     {
         private readonly IVConnection _vConnection;
@@ -78,97 +91,39 @@ public class VConnectionManager : IDisposable
 
         public IObservable<string> Notifications => _vConnection.Notifications;
 
+        public IAsyncEnumerable<string> AsyncNotifications => _vConnection.AsyncNotifications;
+
         public Task WriteLineAsync(string text, CancellationToken cancellationToken) => _vConnection.WriteLineAsync(text, cancellationToken);
 
         public void Dispose() => Interlocked.Exchange(ref _disposeAction, null)?.Invoke();
     }
 
-    private class VConnectionInfo
+    /// <summary>
+    /// Releases the unmanaged resources used by the class and optionally releases the managed resources.
+    /// </summary>
+    /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
     {
-        private Task<IVConnection>? _vConnectionTask;
-        private IVConnection? _vConnection;
-        private int _connectionCount;
-        private DateTime _lastConnectedUtc = DateTime.UtcNow;
-
-        public VConnectionInfo(string host, CancellationToken cancellationToken)
-        {
-            _vConnectionTask = ConnectAsync(host, cancellationToken);
-
-            static async Task<IVConnection> ConnectAsync(string host, CancellationToken cancellationToken)
-                => await VConnection.ConnectAsync(host, cancellationToken);
-        }
-
-        public ValueTask<IVConnection>? Acquire()
-        {
-            Task<IVConnection> vConnectionTask;
-            IVConnection? vConnection;
-            lock (this) {
-                if (_vConnectionTask == null)
-                    return null;
-                vConnectionTask = _vConnectionTask;
-                vConnection = _vConnection;
-                _connectionCount++;
-            }
-            if (vConnection != null)
-                return new(new VConnectionMapper(vConnection, () => {
-                    lock (this) {
-                        _connectionCount--;
-                        _lastConnectedUtc = DateTime.UtcNow;
+        if (!_disposedValue) {
+            if (disposing) {
+                if (!_cancellationTokenSource.IsCancellationRequested)
+                    _cancellationTokenSource.Cancel();
+                lock (_connections) {
+                    foreach (var info in _connections.Values) {
+                        info.Dispose();
                     }
-                }));
-            return new(Continue(vConnectionTask));
-
-            async Task<IVConnection> Continue(Task<IVConnection> vConnectionTask)
-            {
-                try {
-                    var vConnection = await vConnectionTask;
-                    lock (this) {
-                        if (_vConnectionTask != null)
-                            _vConnection = vConnection;
-                    }
-                    return new VConnectionMapper(vConnection, () => {
-                        lock (this) {
-                            _connectionCount--;
-                            _lastConnectedUtc = DateTime.UtcNow;
-                        }
-                    });
-                } catch {
-                    lock (this) {
-                        _connectionCount--;
-                        _vConnectionTask = null;
-                    }
-                    throw;
+                    _connections.Clear();
                 }
             }
+            _disposedValue = true;
         }
+    }
 
-        public bool TryRelease(TimeSpan after)
-        {
-            lock (this) {
-                if (_vConnectionTask == null)
-                    return true;
-                if (_connectionCount == 0 && _lastConnectedUtc.Add(after) < DateTime.UtcNow) {
-                    _vConnectionTask.Dispose();
-                    _vConnectionTask = null;
-                    return true;
-                }
-                return false;
-            }
-        }
-
-        public void Dispose()
-        {
-            lock (this) {
-                if (_vConnection != null) {
-                    _vConnection.Dispose();
-                } else if (_vConnectionTask != null) {
-                    DisposeWhenDone(_vConnectionTask);
-                }
-                _vConnectionTask = null;
-                _vConnection = null;
-            }
-
-            async void DisposeWhenDone(Task<IVConnection> task) => (await task).Dispose();
-        }
+    /// <inheritdoc cref="IDisposable.Dispose"/>
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

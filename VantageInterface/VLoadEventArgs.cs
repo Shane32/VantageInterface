@@ -1,17 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public class VLoadEventArgs : VEventArgs
 {
-    public class VLoadEventArgs : VEventArgs
-    {
-        public float Percent { get; }
+    public float Percent { get; }
 
-        public VLoadEventArgs(int vid, float value)
-            : base(vid, VEventType.LoadUpdate)
-        {
-            Percent = value;
-        }
+    public VLoadEventArgs(int vid, float value)
+        : base(vid, VEventType.LoadUpdate)
+    {
+        Percent = value;
     }
 }
