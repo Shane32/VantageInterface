@@ -1,18 +1,14 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace VantageInterface;
 
-public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
+public class VControl : IDisposable
 {
     //private variables
     private readonly IVConnection _connection;
-    private readonly IDisposable _subscription;
-    private volatile bool _connected;
     private event Action<string?>? _gotText;
+    private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private bool _connected => !_cancellationTokenSource.IsCancellationRequested;
 
     //properties
     public VControlExecute Execute { get; }
@@ -25,14 +21,50 @@ public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
     public event EventHandler<VTaskEventArgs>? OnTaskUpdate;
     public event EventHandler<VButtonEventArgs>? OnButtonUpdate;
     public event EventHandler<VTemperatureSensorEventArgs>? OnTemperatureSensorUpdate;
+    public event EventHandler<EventArgs>? OnDisconnected;
 
-    public VControl(IVConnection connection) {
+    /// <summary>
+    /// Initializes a new instance.
+    /// </summary>
+    public VControl(IVConnection connection)
+    {
+        if (!connection.Connected)
+            throw new ArgumentException("Connection must be connected.", nameof(connection));
         Execute = new VControlExecute(this);
         Get = new VControlGet(this);
         Set = new VControlSet(this);
         _connection = connection;
-        _subscription = _connection.Notifications.Subscribe(this);
-        _connected = true;
+        _ = StartListening1Async();
+        _ = StartListening2Async();
+
+        async Task StartListening1Async()
+        {
+            // events get synchronized back to the caller's context
+            try {
+                await foreach (var txt in _connection.AsyncNotifications.WithCancellation(_cancellationTokenSource.Token).ConfigureAwait(true)) {
+                    OnNext(txt);
+                }
+            } finally {
+                if (!_cancellationTokenSource.IsCancellationRequested)
+                    _cancellationTokenSource.Cancel();
+                OnDisconnected?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        async Task StartListening2Async()
+        {
+            // gotText gets called on a threadpool thread, so synchronous calls to WaitFor work properly
+            try {
+                await foreach (var txt in _connection.AsyncNotifications.WithCancellation(_cancellationTokenSource.Token).ConfigureAwait(false)) {
+                    _gotText?.Invoke(txt);
+                }
+            } finally {
+                if (!_cancellationTokenSource.IsCancellationRequested)
+                    _cancellationTokenSource.Cancel();
+                Debug.WriteLine("Connection closed");
+                _gotText?.Invoke(null);
+            }
+        }
     }
 
     internal void WriteLine(string str)
@@ -45,36 +77,10 @@ public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
         return _connection.WriteLineAsync(str, cancellationToken);
     }
 
-    void IObserver<string>.OnError(Exception error)
-        => throw new NotImplementedException();
-
-    void IObserver<string>.OnCompleted()
-    {
-        try {
-            Debug.WriteLine("Connection closed gracefully");
-            _gotText?.Invoke(null);
-
-            //                Debug.WriteLine("disconnected");
-            //                IObserver<VEventArgs>[] os;
-            //                lock (_observers)
-            //                {
-            //                    _connected = false;
-            //                    os = _observers.ToArray();
-            //                    _observers.Clear();
-            //                }
-            //                foreach (var o in os)
-            //                {
-            //                    o.OnCompleted();
-            //                }
-
-        } catch { }
-    }
-
-    void IObserver<string>.OnNext(string ret)
+    private void OnNext(string ret)
     {
         try {
             Debug.WriteLine($"Got some text: {ret}");
-            _gotText?.Invoke(ret);
             VEventArgs? eventArgs = null;
             if (StartsWith("S:LOAD ") || StartsWith("R:GETLOAD ")) { //LOAD 123 55.0
                 var (vid, percent) = ret.ParseLoad();
@@ -102,30 +108,24 @@ public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
                 OnTemperatureSensorUpdate?.Invoke(this, ev);
                 eventArgs = ev;
             }
-            if (eventArgs != null) {
-                IObserver<VEventArgs>[] os;
-                lock (_observers) {
-                    os = _observers.ToArray();
-                }
-                foreach (var o in os) {
-                    o.OnNext(eventArgs);
-                }
-            }
         } catch { }
 
         bool StartsWith(string value) => ret.StartsWith(value, StringComparison.Ordinal);
     }
-    
-    public void Dispose() {
-        _subscription.Dispose();
-        _connected = false;
+
+    public void Dispose()
+    {
+        if (!_cancellationTokenSource.IsCancellationRequested)
+            _cancellationTokenSource.Cancel();
         GC.SuppressFinalize(this);
     }
 
     internal string WaitFor(string commandToSend, string commandToWaitFor)
     {
-        if (!_connected) throw new ObjectDisposedException(nameof(VControl));
-        if (!commandToWaitFor.EndsWith(" ", StringComparison.Ordinal)) commandToWaitFor += " ";
+        if (!_connected)
+            throw new ObjectDisposedException(nameof(VControl));
+        if (!commandToWaitFor.EndsWith(" ", StringComparison.Ordinal))
+            commandToWaitFor += " ";
         string? result = null;
         using var manualResetEvent = new ManualResetEvent(false);
         void task(string? command)
@@ -159,30 +159,25 @@ public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
 
     internal async Task<string> WaitForAsync(string commandToSend, string commandToWaitFor, CancellationToken cancellationToken = default)
     {
-        if (!commandToWaitFor.EndsWith(" ", StringComparison.Ordinal)) commandToWaitFor += " ";
+        if (!commandToWaitFor.EndsWith(" ", StringComparison.Ordinal))
+            commandToWaitFor += " ";
         var taskCompletionSource = new TaskCompletionSource<string>();
 
         void task(string? command)
         {
-            if (command == null)
-            {
+            if (command == null) {
                 _gotText -= task;
                 //run the callback on a separate thread
-                Task.Run(() =>
-                {
+                Task.Run(() => {
                     //assuming that another thread has awaited taskCompletionSource.Task,
                     //  this will run the completion function synchronously
                     taskCompletionSource.SetException(new ObjectDisposedException(nameof(VControl)));
                 }, default);
-            }
-            else
-            {
-                if (command.StartsWith(commandToWaitFor, StringComparison.Ordinal))
-                {
+            } else {
+                if (command.StartsWith(commandToWaitFor, StringComparison.Ordinal)) {
                     _gotText -= task;
                     //run the callback on a separate thread
-                    Task.Run(() =>
-                    {
+                    Task.Run(() => {
                         //assuming that another thread has awaited taskCompletionSource.Task,
                         //  this will run that function synchronously
                         taskCompletionSource.SetResult(command);
@@ -192,42 +187,11 @@ public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
         }
 
         _gotText += task;
-        if (!_connected)
-        {
+        if (!_connected) {
             _gotText -= task;
             throw new ObjectDisposedException(nameof(VControl));
         }
         await WriteLineAsync(commandToSend, cancellationToken).ConfigureAwait(false);
         return await taskCompletionSource.Task.ConfigureAwait(false);
-    }
-
-    private readonly List<IObserver<VEventArgs>> _observers = new List<IObserver<VEventArgs>>();
-    public IDisposable Subscribe(IObserver<VEventArgs> observer)
-    {
-        lock (_observers)
-        {
-            if (!_connected)
-                throw new ObjectDisposedException(nameof(VControl));
-            _observers.Add(observer);
-        }
-        return new Subscription(() =>
-        {
-            lock (_observers)
-            {
-                _observers.Remove(observer);
-            }
-        });
-    }
-
-    private class Subscription : IDisposable
-    {
-        private readonly Action _disposeAction;
-        public Subscription(Action disposeAction)
-        {
-            _disposeAction = disposeAction ?? throw new ArgumentNullException(nameof(disposeAction));
-        }
-
-        public void Dispose()
-            => _disposeAction();
     }
 }

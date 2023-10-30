@@ -60,6 +60,9 @@ public sealed class VConnection : IObservable<string>, IDisposable, IVConnection
 
     private bool _disposed => _ctsToken.IsCancellationRequested;
 
+    /// <inheritdoc/>
+    public bool Connected => !_disposed;
+
     /// <summary>
     /// Initializes a new connection to a Vantage processor.
     /// </summary>
@@ -85,9 +88,7 @@ public sealed class VConnection : IObservable<string>, IDisposable, IVConnection
         }
     }
 
-    /// <summary>
-    /// Sends a line of text to the connected Vantage processor.
-    /// </summary>
+    /// <inheritdoc/>
     public Task WriteLineAsync(string text, CancellationToken cancellationToken)
     {
         if (_disposed)
@@ -123,10 +124,7 @@ public sealed class VConnection : IObservable<string>, IDisposable, IVConnection
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Returns an <see cref="IObservable{T}"/> instance which can be used to listen for lines of text from the Vantage processor.
-    /// The calls to <see cref="IObserver{T}.OnNext(T)"/> are not synchronized back to the caller's context.
-    /// </summary>
+    /// <inheritdoc/>
     public IObservable<string> Notifications => this;
 
     IDisposable IObservable<string>.Subscribe(IObserver<string> observer)
@@ -135,9 +133,7 @@ public sealed class VConnection : IObservable<string>, IDisposable, IVConnection
         return new Disposer(this, observer);
     }
 
-    /// <summary>
-    /// Returns an <see cref="IAsyncEnumerable{T}"/> that can be used to listen for lines of text from the Vantage processor.
-    /// </summary>
+    /// <inheritdoc/>
     public IAsyncEnumerable<string> AsyncNotifications => Notifications.ToAsyncEnumerable();
 
     private class Disposer : IDisposable

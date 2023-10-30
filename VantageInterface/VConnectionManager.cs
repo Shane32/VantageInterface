@@ -89,6 +89,8 @@ public partial class VConnectionManager : IDisposable
             _disposeAction = disposeAction;
         }
 
+        public bool Connected => _vConnection.Connected;
+
         public IObservable<string> Notifications => _vConnection.Notifications;
 
         public IAsyncEnumerable<string> AsyncNotifications => _vConnection.AsyncNotifications;
