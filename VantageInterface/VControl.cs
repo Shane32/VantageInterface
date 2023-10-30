@@ -32,11 +32,12 @@ public class VControl : IDisposable, IObservable<VEventArgs>, IObserver<string>
         Set = new VControlSet(this);
         _connection = connection;
         _subscription = _connection.Notifications.Subscribe(this);
+        _connected = true;
     }
 
     internal void WriteLine(string str)
     {
-        throw new NotImplementedException();
+        WriteLineAsync(str, default).GetAwaiter().GetResult();
     }
 
     internal Task WriteLineAsync(string str, CancellationToken cancellationToken = default)
