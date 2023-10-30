@@ -1,80 +1,74 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
+namespace VantageInterface;
 
-namespace VantageInterface
+public class VControlExecute
 {
-    public class VControlExecute
+    private readonly VControl _control;
+
+    internal VControlExecute(VControl control)
     {
-        private VControl _control;
+        _control = control;
+    }
 
-        internal VControlExecute(VControl control)
-        {
-            _control = control;
-        }
+    public void Task(int vid, TaskModes mode)
+    {
+        _control.WriteLine($"TASK {vid} {mode.ToString().ToUpper(CultureInfo.InvariantCulture)}");
+    }
 
-        public void Task(int vid, TaskModes mode)
-        {
-            _control.WriteLine($"TASK {vid} {mode.ToString().ToUpper()}");
-        }
+    public Task TaskAsync(int vid, TaskModes mode)
+    {
+        return _control.WriteLineAsync($"TASK {vid} {mode.ToString().ToUpper(CultureInfo.InvariantCulture)}");
+    }
 
-        public Task TaskAsync(int vid, TaskModes mode)
+    public void Button(int vid, ButtonModes mode)
+    {
+        switch (mode)
         {
-            return _control.WriteLineAsync($"TASK {vid} {mode.ToString().ToUpper()}");
+            case ButtonModes.Press:
+                _control.WriteLine($"BTNPRESS {vid}");
+                break;
+            case ButtonModes.Release:
+                _control.WriteLine($"BTNRELEASE {vid}");
+                break;
+            case ButtonModes.PressRelease:
+                _control.WriteLine($"BTN {vid}");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mode));
         }
+    }
 
-        public void Button(int vid, ButtonModes mode)
+    public Task ButtonAsync(int vid, ButtonModes mode)
+    {
+        switch (mode)
         {
-            switch (mode)
-            {
-                case ButtonModes.Press:
-                    _control.WriteLine($"BTNPRESS {vid}");
-                    break;
-                case ButtonModes.Release:
-                    _control.WriteLine($"BTNRELEASE {vid}");
-                    break;
-                case ButtonModes.PressRelease:
-                    _control.WriteLine($"BTN {vid}");
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(mode));
-            }
+            case ButtonModes.Press:
+                return _control.WriteLineAsync($"BTNPRESS {vid}");
+            case ButtonModes.Release:
+                return _control.WriteLineAsync($"BTNRELEASE {vid}");
+            case ButtonModes.PressRelease:
+                return _control.WriteLineAsync($"BTN {vid}");
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mode));
         }
+    }
 
-        public Task ButtonAsync(int vid, ButtonModes mode)
+    public string Command(string commandName, params string[] parameters)
+    {
+        var str = commandName;
+        if (parameters != null && parameters.Length > 0)
         {
-            switch (mode)
-            {
-                case ButtonModes.Press:
-                    return _control.WriteLineAsync($"BTNPRESS {vid}");
-                case ButtonModes.Release:
-                    return _control.WriteLineAsync($"BTNRELEASE {vid}");
-                case ButtonModes.PressRelease:
-                    return _control.WriteLineAsync($"BTN {vid}");
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(mode));
-            }
+            str += string.Join(" ", parameters);
         }
+        return _control.WaitFor(str, "R:" + commandName);
+    }
 
-        public string Command(string commandName, params string[] parameters)
+    public Task<string> CommandAsync(string commandName, params string[] parameters)
+    {
+        var str = commandName;
+        if (parameters != null && parameters.Length > 0)
         {
-            var str = commandName;
-            if (parameters != null && parameters.Length > 0)
-            {
-                str += string.Join(" ", parameters);
-            }
-            return _control.WaitFor(str, "R:" + commandName);
+            str += string.Join(" ", parameters);
         }
-
-        public Task<string> CommandAsync(string commandName, params string[] parameters)
-        {
-            var str = commandName;
-            if (parameters != null && parameters.Length > 0)
-            {
-                str += string.Join(" ", parameters);
-            }
-            return _control.WaitForAsync(str, "R:" + commandName);
-        }
+        return _control.WaitForAsync(str, "R:" + commandName);
     }
 }

@@ -1,6 +1,6 @@
 using GraphQL.Execution;
+using VantageInterface;
 using VantageServer;
-using VantageServer.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<IEnumerable<HouseConfiguration>>(builder.Configuration.GetSection("Houses"));
@@ -9,6 +9,7 @@ builder.Services.AddGraphQL(b => b
     .AddAutoSchema<Query>(s => s.WithMutation<Mutation>().WithSubscription<Subscription>())
     .AddExecutionStrategy<SerialExecutionStrategy>(GraphQLParser.AST.OperationType.Query)
     .AddScopedSubscriptionExecutionStrategy());
+builder.Services.AddSingleton<VConnectionManager>();
 
 var app = builder.Build();
 

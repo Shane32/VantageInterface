@@ -1,15 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public enum VEventType
 {
-    public enum VEventType
-    {
-        LoadUpdate,
-        LedUpdate,
-        TaskUpdate,
-        ButtonUpdate,
-        TemperatureSensorUpdate,
-    }
+    LoadUpdate,
+    LedUpdate,
+    TaskUpdate,
+    ButtonUpdate,
+    TemperatureSensorUpdate,
 }

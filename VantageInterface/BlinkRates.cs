@@ -1,15 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public enum BlinkRates
 {
-    public enum BlinkRates
-    {
-        Fast,
-        Medium,
-        Slow,
-        VerySlow,
-        Off
-    }
+    Fast,
+    Medium,
+    Slow,
+    VerySlow,
+    Off
 }

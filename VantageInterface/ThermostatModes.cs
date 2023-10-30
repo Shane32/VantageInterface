@@ -1,14 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public enum ThermostatModes
 {
-    public enum ThermostatModes
-    {
-        Off,
-        Cool,
-        Heat,
-        Auto,
-    }
+    Off,
+    Cool,
+    Heat,
+    Auto,
 }

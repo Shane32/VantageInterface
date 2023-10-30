@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public enum ButtonModes
 {
-    public enum ButtonModes
-    {
-        Press = 0,
-        Release = 1,
-        PressRelease = 2,
-    }
+    Press = 0,
+    Release = 1,
+    PressRelease = 2,
 }

@@ -1,14 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace VantageInterface;
 
-namespace VantageInterface
+public enum TemperatureSensors
 {
-    public enum TemperatureSensors
-    {
-        Cool,
-        Heat,
-        Indoor,
-        Outdoor,
-    }
+    Cool,
+    Heat,
+    Indoor,
+    Outdoor,
 }
