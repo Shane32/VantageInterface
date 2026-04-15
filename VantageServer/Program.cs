@@ -10,6 +10,7 @@ builder.Services.AddGraphQL(b => b
     .AddExecutionStrategy<SerialExecutionStrategy>(GraphQLParser.AST.OperationType.Query)
     .AddScopedSubscriptionExecutionStrategy());
 builder.Services.AddSingleton<VConnectionManager>();
+builder.Services.AddScoped<HouseManager>(); // scoped so that any used acquired connections can be released when the request is done
 
 var app = builder.Build();
 
